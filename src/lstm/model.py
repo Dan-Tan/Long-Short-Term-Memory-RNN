@@ -1,4 +1,4 @@
-"""Sequential LSTM Model Container for time-series forecasting with regularization."""
+"""Sequential LSTM Model Container for time-series forecasting with residual skip connection."""
 
 import numpy as np
 from typing import List, Dict, Tuple, Optional
@@ -8,7 +8,7 @@ from src.lstm.utils import mean_squared_error
 
 
 class SequentialLSTM:
-    """Sequential LSTM Model container."""
+    """Sequential LSTM Model container with optional residual skip connection."""
 
     def __init__(
         self,
@@ -19,6 +19,7 @@ class SequentialLSTM:
         weight_decay: float = 1e-4,
         dropout: float = 0.0,
         grad_clip: float = 5.0,
+        use_residual: bool = True,
     ) -> None:
         """Initialize SequentialLSTM container.
 
@@ -30,7 +31,12 @@ class SequentialLSTM:
             weight_decay: L2 regularization coefficient.
             dropout: Recurrent dropout rate (0.0 to 1.0).
             grad_clip: Maximum gradient clipping norm.
+            use_residual: Whether to use residual skip connection (adds last step input x_last to forecast).
         """
+        self.input_dim = input_dim
+        self.output_dim = output_dim
+        self.use_residual = use_residual
+
         self.lstm = LSTMLayer(
             input_dim,
             hidden_dim,
@@ -54,7 +60,7 @@ class SequentialLSTM:
         self.dense.set_learning_rate(lr)
 
     def forward(self, X: np.ndarray, training: bool = True) -> np.ndarray:
-        """Forward pass through LSTM layer followed by Dense projection.
+        """Forward pass through LSTM layer followed by Dense projection and optional Residual Skip.
 
         Args:
             X: Input tensor of shape (N, T, input_dim).
@@ -64,8 +70,14 @@ class SequentialLSTM:
             Output predictions of shape (N, output_dim).
         """
         h_out = self.lstm.forward(X, training=training)
-        preds = self.dense.forward(h_out, training=training)
-        return preds
+        residual = self.dense.forward(h_out, training=training)
+
+        if self.use_residual:
+            x_last = X[:, -1, : self.output_dim]
+            preds = x_last + residual
+            return preds
+
+        return residual
 
     def predict(self, X: np.ndarray) -> np.ndarray:
         """Predict targets for input sequences."""

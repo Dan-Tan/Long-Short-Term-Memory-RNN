@@ -19,8 +19,8 @@ from src.lstm import SequentialLSTM, generate_sine_wave_data, mean_squared_error
 
 def parse_args():
     parser = argparse.ArgumentParser(description="Full training pipeline with high-resolution plot generation")
-    parser.add_argument("--epochs", type=int, default=20, help="Number of training epochs (default: 20)")
-    parser.add_argument("--batch-size", type=int, default=32, help="Mini-batch size (default: 32)")
+    parser.add_argument("--epochs", type=int, default=150, help="Number of training epochs (default: 150)")
+    parser.add_argument("--batch-size", type=int, default=16, help="Mini-batch size (default: 16)")
     parser.add_argument("--lr", type=float, default=0.03, help="Initial learning rate (default: 0.03)")
     parser.add_argument("--lr-decay", type=float, default=0.95, help="Learning rate decay factor")
     parser.add_argument("--weight-decay", type=float, default=1e-4, help="L2 regularization weight decay")
