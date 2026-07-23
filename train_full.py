@@ -23,6 +23,9 @@ def parse_args():
     parser.add_argument("--batch-size", type=int, default=32, help="Mini-batch size (default: 32)")
     parser.add_argument("--lr", type=float, default=0.03, help="Initial learning rate (default: 0.03)")
     parser.add_argument("--lr-decay", type=float, default=0.95, help="Learning rate decay factor")
+    parser.add_argument("--weight-decay", type=float, default=1e-4, help="L2 regularization weight decay")
+    parser.add_argument("--dropout", type=float, default=0.1, help="Recurrent dropout rate")
+    parser.add_argument("--grad-clip", type=float, default=5.0, help="Maximum gradient clipping norm")
     parser.add_argument("--hidden-dim", type=int, default=32, help="LSTM hidden units")
     parser.add_argument("--seq-len", type=int, default=20, help="Sequence length")
     return parser.parse_args()
@@ -91,7 +94,15 @@ def main():
     X_train, y_train = generate_sine_wave_data(num_samples=2000, seq_length=args.seq_len)
     X_test, y_test = generate_sine_wave_data(num_samples=500, seq_length=args.seq_len, seed=123)
 
-    model = SequentialLSTM(input_dim=1, hidden_dim=args.hidden_dim, output_dim=1, learning_rate=args.lr)
+    model = SequentialLSTM(
+        input_dim=1,
+        hidden_dim=args.hidden_dim,
+        output_dim=1,
+        learning_rate=args.lr,
+        weight_decay=args.weight_decay,
+        dropout=args.dropout,
+        grad_clip=args.grad_clip,
+    )
 
     history = {
         "loss": [],

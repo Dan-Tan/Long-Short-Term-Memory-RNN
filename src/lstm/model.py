@@ -1,4 +1,4 @@
-"""Sequential LSTM Model Container for time-series forecasting."""
+"""Sequential LSTM Model Container for time-series forecasting with regularization."""
 
 import numpy as np
 from typing import List, Dict, Tuple, Optional
@@ -16,6 +16,9 @@ class SequentialLSTM:
         hidden_dim: int = 32,
         output_dim: int = 1,
         learning_rate: float = 0.01,
+        weight_decay: float = 1e-4,
+        dropout: float = 0.0,
+        grad_clip: float = 5.0,
     ) -> None:
         """Initialize SequentialLSTM container.
 
@@ -24,9 +27,26 @@ class SequentialLSTM:
             hidden_dim: LSTM hidden units.
             output_dim: Forecast output dimension.
             learning_rate: Learning rate for parameters.
+            weight_decay: L2 regularization coefficient.
+            dropout: Recurrent dropout rate (0.0 to 1.0).
+            grad_clip: Maximum gradient clipping norm.
         """
-        self.lstm = LSTMLayer(input_dim, hidden_dim, return_sequences=False, learning_rate=learning_rate)
-        self.dense = DenseLayer(hidden_dim, output_dim, learning_rate=learning_rate)
+        self.lstm = LSTMLayer(
+            input_dim,
+            hidden_dim,
+            return_sequences=False,
+            dropout=dropout,
+            learning_rate=learning_rate,
+            weight_decay=weight_decay,
+            grad_clip=grad_clip,
+        )
+        self.dense = DenseLayer(
+            hidden_dim,
+            output_dim,
+            learning_rate=learning_rate,
+            weight_decay=weight_decay,
+            grad_clip=grad_clip,
+        )
 
     def set_learning_rate(self, lr: float) -> None:
         """Set learning rate across all sub-layers."""

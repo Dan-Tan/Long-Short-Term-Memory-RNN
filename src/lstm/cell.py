@@ -1,4 +1,4 @@
-"""Modular, vectorized LSTM Cell implementation."""
+"""Modular, vectorized LSTM Cell implementation with gradient clipping and L2 regularization."""
 
 import numpy as np
 from typing import Tuple, Dict
@@ -13,6 +13,8 @@ class LSTMCell:
         input_dim: int,
         hidden_dim: int,
         learning_rate: float = 0.01,
+        weight_decay: float = 1e-4,
+        grad_clip: float = 5.0,
     ) -> None:
         """Initialize LSTM cell parameters.
 
@@ -20,10 +22,14 @@ class LSTMCell:
             input_dim: Input dimension size.
             hidden_dim: Hidden state / cell state dimension size.
             learning_rate: Learning rate for parameters.
+            weight_decay: L2 regularization coefficient.
+            grad_clip: Maximum gradient norm for clipping.
         """
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
         self.learning_rate = learning_rate
+        self.weight_decay = weight_decay
+        self.grad_clip = grad_clip
 
         # Xavier / Glorot uniform initialization for combined weights [W_f; W_i; W_c; W_o]
         concat_dim = input_dim + hidden_dim
@@ -51,10 +57,7 @@ class LSTMCell:
         Returns:
             Tuple of (h_next, c_next, cache_dict).
         """
-        # Concatenate input and previous hidden state: (N, input_dim + hidden_dim)
         z = np.hstack((x, h_prev))
-
-        # Gate linear projection: (N, 4 * hidden_dim)
         gates = np.dot(z, self.W.T) + self.b
 
         H = self.hidden_dim
@@ -63,11 +66,8 @@ class LSTMCell:
         c_tilde = Tanh.forward(gates[:, 2*H:3*H])
         o_gate = Sigmoid.forward(gates[:, 3*H:])
 
-        # Cell state update
         c_next = f_gate * c_prev + i_gate * c_tilde
         tanh_c_next = Tanh.forward(c_next)
-
-        # Hidden state update
         h_next = o_gate * tanh_c_next
 
         cache = {
@@ -107,43 +107,43 @@ class LSTMCell:
         c_tilde = cache["c_tilde"]
         o_gate = cache["o_gate"]
         c_prev = cache["c_prev"]
-        c_next = cache["c_next"]
         tanh_c_next = cache["tanh_c_next"]
 
-        # Gradient wrt output gate and tanh(c_next)
         do_gate = dh_next * tanh_c_next
         dc_target = dh_next * o_gate * Tanh.derivative(tanh_c_next) + dc_next
 
-        # Gradients wrt individual gates
         df_gate = dc_target * c_prev
         di_gate = dc_target * c_tilde
         dc_tilde = dc_target * i_gate
         dc_prev = dc_target * f_gate
 
-        # Derivatives wrt pre-activation gates
         d_gates_f = df_gate * Sigmoid.derivative(f_gate)
         d_gates_i = di_gate * Sigmoid.derivative(i_gate)
         d_gates_c = dc_tilde * Tanh.derivative(c_tilde)
         d_gates_o = do_gate * Sigmoid.derivative(o_gate)
 
-        # Concatenate gate derivatives: (N, 4 * hidden_dim)
         d_gates = np.hstack((d_gates_f, d_gates_i, d_gates_c, d_gates_o))
 
-        # Weight and bias gradients
         self.dW += np.dot(d_gates.T, z)
         self.db += np.sum(d_gates, axis=0)
 
-        # Gradient wrt concatenated input z = [x, h_prev]
         dz = np.dot(d_gates, self.W)
-
         dx = dz[:, :self.input_dim]
         dh_prev = dz[:, self.input_dim:]
 
         return dx, dh_prev, dc_prev
 
-    def update_params(self) -> None:
-        """Update weights and zero out gradient accumulators."""
-        self.W -= self.learning_rate * self.dW
-        self.b -= self.learning_rate * self.db
+    def update_params(self, batch_size: int = 1) -> None:
+        """Update weights with L2 regularization and gradient clipping."""
+        g_W = self.dW / batch_size + self.weight_decay * self.W
+        g_b = self.db / batch_size
+
+        if self.grad_clip > 0.0:
+            g_W = np.clip(g_W, -self.grad_clip, self.grad_clip)
+            g_b = np.clip(g_b, -self.grad_clip, self.grad_clip)
+
+        self.W -= self.learning_rate * g_W
+        self.b -= self.learning_rate * g_b
+
         self.dW.fill(0.0)
         self.db.fill(0.0)
