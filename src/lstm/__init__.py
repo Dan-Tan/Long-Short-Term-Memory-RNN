@@ -5,6 +5,7 @@ from src.lstm.layers import LSTMLayer
 from src.lstm.dense import DenseLayer
 from src.lstm.model import SequentialLSTM
 from src.lstm.utils import generate_sine_wave_data, mean_squared_error
+from src.lstm.grad_check import eval_numerical_gradient, compute_relative_error
 
 __all__ = [
     "LSTMCell",
@@ -13,4 +14,6 @@ __all__ = [
     "SequentialLSTM",
     "generate_sine_wave_data",
     "mean_squared_error",
+    "eval_numerical_gradient",
+    "compute_relative_error",
 ]
