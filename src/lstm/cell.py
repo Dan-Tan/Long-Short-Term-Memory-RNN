@@ -36,6 +36,8 @@ class LSTMCell:
         limit = np.sqrt(6.0 / (concat_dim + hidden_dim))
         self.W = np.random.uniform(-limit, limit, (4 * hidden_dim, concat_dim)).astype(np.float32)
         self.b = np.zeros((4 * hidden_dim,), dtype=np.float32)
+        # Initialize Forget Gate bias to +1.0 (prevents memory decay across time steps)
+        self.b[:hidden_dim] = 1.0
 
         # Gradient accumulators
         self.dW = np.zeros_like(self.W)

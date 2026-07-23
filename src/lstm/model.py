@@ -8,7 +8,7 @@ from src.lstm.utils import mean_squared_error
 
 
 class SequentialLSTM:
-    """Sequential LSTM Model container with optional residual skip connection."""
+    """Sequential LSTM Model container with optional residual skip connection and autocorrelation penalty."""
 
     def __init__(
         self,
@@ -19,7 +19,8 @@ class SequentialLSTM:
         weight_decay: float = 1e-4,
         dropout: float = 0.0,
         grad_clip: float = 5.0,
-        use_residual: bool = True,
+        use_residual: bool = False,
+        autocorr_penalty: float = 0.0,
     ) -> None:
         """Initialize SequentialLSTM container.
 
@@ -32,10 +33,12 @@ class SequentialLSTM:
             dropout: Recurrent dropout rate (0.0 to 1.0).
             grad_clip: Maximum gradient clipping norm.
             use_residual: Whether to use residual skip connection (adds last step input x_last to forecast).
+            autocorr_penalty: Loss penalty weight penalizing residual autocorrelation across mini-batch samples.
         """
         self.input_dim = input_dim
         self.output_dim = output_dim
         self.use_residual = use_residual
+        self.autocorr_penalty = autocorr_penalty
 
         self.lstm = LSTMLayer(
             input_dim,
@@ -73,7 +76,9 @@ class SequentialLSTM:
         residual = self.dense.forward(h_out, training=training)
 
         if self.use_residual:
-            x_last = X[:, -1, : self.output_dim]
+            x_last = X[:, -1, : min(self.input_dim, self.output_dim)]
+            if x_last.shape[1] < self.output_dim:
+                x_last = np.tile(x_last, (1, int(np.ceil(self.output_dim / x_last.shape[1]))))[:, : self.output_dim]
             preds = x_last + residual
             return preds
 
@@ -129,16 +134,32 @@ class SequentialLSTM:
 
                 X_batch = X_shuffled[start_idx:end_idx]
                 y_batch = y_shuffled[start_idx:end_idx]
+                batch_len = end_idx - start_idx
 
                 # Forward pass
                 preds = self.forward(X_batch, training=True)
 
                 # Mean Squared Error Loss
                 batch_loss = mean_squared_error(preds, y_batch)
-                epoch_loss += batch_loss * (end_idx - start_idx)
 
-                # MSE gradient: dL/dY = 2 * (y_pred - y_true) / N
-                dL_dpreds = 2.0 * (preds - y_batch) / (end_idx - start_idx)
+                # Loss & Gradient computation with optional Autocorrelation Penalty
+                E = preds - y_batch
+                if self.autocorr_penalty > 0.0 and batch_len > 1:
+                    diff_E = E[1:] - E[:-1]
+                    ac_loss = float(np.mean(diff_E ** 2))
+                    batch_loss += self.autocorr_penalty * ac_loss
+
+                    dL_dpreds = 2.0 * E / batch_len
+                    d_ac = np.zeros_like(E)
+                    d_ac[0] = 2.0 * (E[0] - E[1]) / (batch_len - 1)
+                    if batch_len > 2:
+                        d_ac[1:-1] = 2.0 * (2.0 * E[1:-1] - E[:-2] - E[2:]) / (batch_len - 1)
+                    d_ac[-1] = 2.0 * (E[-1] - E[-2]) / (batch_len - 1)
+                    dL_dpreds += self.autocorr_penalty * d_ac
+                else:
+                    dL_dpreds = 2.0 * E / batch_len
+
+                epoch_loss += batch_loss * batch_len
 
                 # Backward pass
                 dh_out = self.dense.backward(dL_dpreds)
@@ -157,3 +178,4 @@ class SequentialLSTM:
                 print(f"Epoch {epoch}/{epochs} - loss: {avg_loss:.6f}{val_str}")
 
         return history
+

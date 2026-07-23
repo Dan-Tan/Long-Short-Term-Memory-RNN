@@ -5,7 +5,7 @@ import numpy as np
 from src.lstm.cell import LSTMCell
 from src.lstm.layers import LSTMLayer
 from src.lstm.model import SequentialLSTM
-from src.lstm.utils import generate_sine_wave_data, mean_squared_error
+from src.lstm.utils import generate_sine_wave_data, mean_squared_error, durbin_watson_statistic
 
 
 def test_lstm_cell_forward_backward():
@@ -61,3 +61,34 @@ def test_sequential_lstm_end_to_end():
 
     mse = model.evaluate(X_train, y_train)
     assert isinstance(mse, float)
+
+
+def test_autocorrelation_mitigations():
+    # Test multi-step, strided, differenced data generation
+    X, y = generate_sine_wave_data(
+        num_samples=50,
+        seq_length=10,
+        stride=4,
+        forecast_horizon=3,
+        differencing=True,
+    )
+    assert X.shape == (50, 10, 1)
+    assert y.shape == (50, 3)
+
+    # Test model fit with residual skip and autocorr penalty
+    model = SequentialLSTM(
+        input_dim=1,
+        hidden_dim=8,
+        output_dim=3,
+        learning_rate=0.01,
+        use_residual=True,
+        autocorr_penalty=0.02,
+    )
+    history = model.fit(X, y, epochs=2, batch_size=10, verbose=False)
+    assert len(history["loss"]) == 2
+
+    preds = model.predict(X[:5])
+    assert preds.shape == (5, 3)
+
+    dw = durbin_watson_statistic(preds, y[:5])
+    assert isinstance(dw, float)
