@@ -11,7 +11,7 @@ This project was originally created upon finishing high school as an early progr
 ### Sequence Forecast Predictions
 Comparing ground truth signals with LSTM sequence predictions:
 
-![Sequence Forecast Predictions](assets/sequence_predictions.png)
+![Sequence Forecast Predictions](assets/sequence_predictions.png?v=1.1)
 
 Achieves MSE loss < 0.01 on sequence prediction.
 
